@@ -59,8 +59,11 @@ class customLinear(tf.keras.layers.Layer):
         Parameters:
             - num_out: number of output nodes
             - activation: activation function
+            - initializer: initializer of layer, default to kaiming
             - BatchNorm: bool, whether to use batch normalization
             - Dropout: float, dropout rate
+            - mask: mask covering weights for pruning
+            - preinit_weights: weights before training
         '''
         super(customLinear, self).__init__()
         self.num_out = num_out
@@ -85,7 +88,8 @@ class customLinear(tf.keras.layers.Layer):
 
 
 
-def makeModel(layers, preinit_weights = None, masks = None,
+def makeFC(preinit_weights = None, masks = None,
+              layers = [10],
               initializer = tf.keras.initializers.HeNormal(),
               activation = 'relu',
               BatchNorm = False,
@@ -118,7 +122,9 @@ def makeModel(layers, preinit_weights = None, masks = None,
         if masks is None:
             mask = None
         else:
-            mask = masks[i]
+            # the masks in pruning function includes the biases
+            # which are np.ones(shape of bias)
+            mask = masks[2*i]
 
         model.add(customLinear(layers[i], 
         activation=activation,
