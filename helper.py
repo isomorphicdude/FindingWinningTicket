@@ -16,6 +16,28 @@ def customPruneFC(model, prune_perc = 0.5):
       masks.append(mask)
     else:
       masks.append(np.ones_like(weight))
-  return masks  
+  return masks   
+
+
+def getInitWeight(prune_model):
+  '''Returns a list of initialized weights from model.'''
+  prune_weight_list = prune_model.get_weights()
+  init_weight_list = []
+  for weight in prune_weight_list:
+    if len(weight.shape)!=0:
+      init_weight_list.append(weight)
+  return init_weight_list  
+
+
+def numParam(model):
+  '''Returns number of nonzero parameters in a model.'''
+  num_params_after = 0
+  for layer in model.trainable_weights:
+    if len(layer.numpy().shape)>1:
+      num_params_after += tf.math.count_nonzero(layer).numpy()
+  print(f"\n \n After pruning, the total no. of nonzero weights is: {num_params_after} \n \n")  
+
+
+# TODO: add data pre-processing pipeline
 
 
