@@ -101,12 +101,12 @@ def makeFC(preinit_weights = None, masks = None,
     '''
     Returns a model for pruning.   
 
-    Parameters:  
-        - layers: list of integers, specifying nodes in hidden layers, 
-                [layer1, layer2, ..., output]  
+    Parameters:    
         - preinit_weights: ndarray, the initialized weights, default to None,
                 None when first initializing  
         - masks: list of ndarray, each element is a mask for all the weights  
+        - layers: list of integers, specifying nodes in hidden layers, 
+                [layer1, layer2, ..., output]
         - optimizer: optimizer
         - loss: loss function for the nn
         - metrics: metrics for evaluation  
