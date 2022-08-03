@@ -11,19 +11,30 @@ class pruning(object):
 
     '''Sets up a pruning experiment.'''  
 
-    def __init__(self, dset, model_params,
+    def __init__(self, ds_train, ds_test, model_params,
                 epochs_for_pruning = 10,
                 num_pruning = 10,
                 step_perc = 0.5):
         '''
-        Args:  
-            - dset: dataset
+        Args:   
+            - ds_train: dataset for training, already batched
+            - ds_test: dataset for testing, already batched
             - model_params: dictionary of parameters
+                            contains the following entries  
+                            - 'layers'
+                            - 'initializer'
+                            - 'activation'
+                            - 'BatchNorm'
+                            - 'Dropout'
+                            - 'optimizer'
+                            - 'loss'
+                            - 'metrics'
             - epochs: epochs to train the model before pruning
             - num_pruning: no. of rounds to prune
             - step_perc: percentage to prune
         '''
-        self.dset = dset
+        self.ds_train = ds_train
+        self.ds_test = ds_test
         self.model_params = model_params
         self.epochs_for_pruning = epochs_for_pruning
         self.num_pruning = num_pruning
@@ -31,20 +42,20 @@ class pruning(object):
 
     # TODO: add Dataset implementaion
     
-    @property
-    def dset(self):
+    # @property
+    # def dset(self):
         # some processing goes in here
         # to modify user input
-        pass
+        # pass
     # @dset.setter
 
-    @property
-    def ds_train(self):
-        pass
+    # @property
+    # def ds_train(self):
+    #     pass
 
-    @property
-    def ds_test(self):
-        pass
+    # @property
+    # def ds_test(self):
+    #     pass
     
 
     def makeModel(self, preinit_weights = None, masks = None):
@@ -54,7 +65,7 @@ class pruning(object):
         return makeFC(
                     preinit_weights,
                     masks,
-                    self.model_params)
+                    **self.model_params)
     
     def prune(self):
         '''
