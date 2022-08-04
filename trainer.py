@@ -58,8 +58,8 @@ def test_one_step(model,
               x,y, 
               loss_fn, 
               test_acc = tf.keras.metrics.
-              SparseCategoricalAccuracy(name = 'train_accuracy'),
-              test_loss = tf.keras.metrics.Mean(name = 'train_loss')
+              SparseCategoricalAccuracy(name = 'test_accuracy'),
+              test_loss = tf.keras.metrics.Mean(name = 'test_loss')
               ):
   
   '''
@@ -82,6 +82,7 @@ def iterPruning(modelFunc,
                 ds_train,
                 ds_test,
                 model_params,
+                train_params,
                 epochs = 10,
                 num_pruning = 10,
                 step_perc = 0.5):  
@@ -91,22 +92,28 @@ def iterPruning(modelFunc,
   Args:
     - modelFunc: function for initializing model, 
                  has func(weights, masks)
+    - ds_train:
+    - ds_test:
+    - model_params:
+    - train_params:
     - epochs: epochs to train the model before pruning
     - num_pruning: no. of rounds to prune
     - step_perc: percentage to prune
   '''  
   
   masks_set = [None]
+  original_acc = []
   # ticket_hist = []
   # init_weight_set = [None]
 
   # unpack parameters
   optimizer = model_params['optimizer']
-  train_loss = model_params['train_loss']
-  train_acc = model_params['train_acc'] 
-  test_loss = model_params['test_loss']
-  test_acc = model_params['test_acc']
   loss_fn = model_params['loss_fn']
+  train_loss = train_params['train_loss'](name = 'train_og_l')
+  train_acc = train_params['train_acc'](name = 'train_og_a')
+  test_loss = train_params['train_loss'](name = 'test_og_l')
+  test_acc = train_params['train_acc'](name = 'test_og_a')
+  
 
   # to use tensorboard
   current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")  
@@ -154,7 +161,7 @@ def iterPruning(modelFunc,
         tf.summary.scalar('test_og_accuracy', test_acc.result(), step=epoch)
 
       # stores original accuracy
-      original_acc = test_acc.result()
+    original_acc = test_acc.result()
 
     # prune and create mask using percentile
     next_masks = customPruneFC(model_to_prune, step_perc)
@@ -168,10 +175,10 @@ def iterPruning(modelFunc,
     print("\n Start Lottery ticket training \n")
 
     # instantiate metrics to use tensorboard  
-    train_ticket_loss = model_params['train_loss']
-    train_ticket_acc = model_params['train_acc']
-    test_ticket_loss = model_params['test_loss']
-    test_ticket_acc = model_params['test_acc']
+    train_ticket_loss = train_params['train_loss'](name = 'train_ticket_l')
+    train_ticket_acc = train_params['train_acc'](name = 'train_ticket_a')
+    test_ticket_loss = train_params['train_loss'](name = 'test_ticket_l')
+    test_ticket_acc = train_params['train_acc'](name = 'test_ticket_a')
 
     train_ticket_log_dir = 'logs/' + current_time + '/train_ticket'
     test_ticket_log_dir = 'logs/' + current_time + '/test_ticket'  
@@ -210,10 +217,11 @@ def iterPruning(modelFunc,
 
       if ticket_acc > original_acc:  
         print(f"\n Early stop, ticket accuracy: {ticket_acc} \n")
-        re_ticket.save(f'saved_models/ticket_acc_{ticket_acc}')
+        re_ticket.save(f'saved_models/ticket_acc_{ticket_acc}'+f'pruning round_{i}')
         # new_model = tf.keras.models.load_model('saved_model/my_model')
         # to reload the model
         break
+    re_ticket.save(f'saved_models/ticket_acc_{test_ticket_acc.result()}'+f' pruning round_{i}')
 
   
 
