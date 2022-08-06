@@ -6,6 +6,8 @@ import tensorflow_datasets as tfds
 
 
 
+'''Initialize custom model for training and pruning.'''
+
 class maskInit(tf.keras.initializers.Initializer):
 
   def __init__(self, mask = None, 
@@ -45,13 +47,13 @@ class maskInit(tf.keras.initializers.Initializer):
     return out  
 
 def makeFC(preinit_weights = None, masks = None,
-              layers = [784, 128, 10],
+              layers = [300, 100, 10],
               activation = 'relu',
               BatchNorm = False,
               Dropout = None,
               optimizer = tf.keras.optimizers.Adam(0.001),
               loss_fn=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-              metrics=[tf.keras.metrics.SparseCategoricalAccuracy()]
+              metrics=tf.keras.metrics.SparseCategoricalAccuracy()
              ):
     '''
     Returns a model for pruning.   
@@ -74,7 +76,9 @@ def makeFC(preinit_weights = None, masks = None,
     '''  
 
     model = tf.keras.Sequential(name = "ModeltoPrune")
-    model.add(tf.keras.layers.InputLayer(input_shape = layers[0]))
+    if layers[0]==300:
+        model.add(tf.keras.layers.Flatten(input_shape = (28,28)))
+        
     num_layer = len(layers)
 
     if BatchNorm and Dropout is None:
@@ -89,11 +93,15 @@ def makeFC(preinit_weights = None, masks = None,
                 preinit_weight = None
             else:
                 preinit_weight = preinit_weights[2*i]
-
-            model.add(tf.keras.layers.Dense(layers[i], 
-            activation=activation,
-            kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
-            model.add(tf.keras.layers.BatchNormalization())
+            if layers[0]==300 and i==num_layer-1:
+              model.add(tf.keras.layers.Dense(layers[i], 
+              kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
+              model.add(tf.keras.layers.BatchNormalization())
+            else:
+              model.add(tf.keras.layers.Dense(layers[i], 
+              activation=activation,
+              kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
+              model.add(tf.keras.layers.BatchNormalization())
 
     if BatchNorm and Dropout:
         for i in range(num_layer):
@@ -109,11 +117,16 @@ def makeFC(preinit_weights = None, masks = None,
                 preinit_weight = preinit_weights[2*i]
 
             dropout = Dropout[i]
-            model.add(tf.keras.layers.Dense(layers[i], 
-            activation=activation,
-            kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
-            model.add(tf.keras.layers.BatchNormalization())
-            model.add(tf.keras.layers.Dropout(dropout))
+
+            if layers[0]==300 and i==num_layer-1:
+              model.add(tf.keras.layers.Dense(layers[i], 
+              kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
+              model.add(tf.keras.layers.BatchNormalization())
+            else:
+              model.add(tf.keras.layers.Dense(layers[i], 
+              activation=activation,
+              kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
+              model.add(tf.keras.layers.BatchNormalization())
 
     if not BatchNorm and Dropout:
         for i in range(num_layer):
@@ -129,10 +142,14 @@ def makeFC(preinit_weights = None, masks = None,
                 preinit_weight = preinit_weights[2*i]
                 
             dropout = Dropout[i]
-            model.add(tf.keras.layers.Dense(layers[i], 
-            activation=activation,
-            kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
-            model.add(tf.keras.layers.Dropout(dropout))
+
+            if layers[0]==300 and i==num_layer-1:
+              model.add(tf.keras.layers.Dense(layers[i], 
+              kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
+            else:
+              model.add(tf.keras.layers.Dense(layers[i], 
+              activation=activation,
+              kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
 
     if not BatchNorm and Dropout is None:
         for i in range(num_layer):
@@ -147,14 +164,20 @@ def makeFC(preinit_weights = None, masks = None,
             else:
                 preinit_weight = preinit_weights[2*i]
                 
-            model.add(tf.keras.layers.Dense(layers[i], 
-            activation=activation,
-            kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
+            if layers[0]==300 and i==num_layer-1:
+              model.add(tf.keras.layers.Dense(layers[i], 
+              kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
+
+            else:
+              model.add(tf.keras.layers.Dense(layers[i], 
+              activation=activation,
+              kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
+
 
     model.compile(optimizer=optimizer,
                   loss=loss_fn,
                   metrics=metrics)
-    model.summary()
+    # model.summary()
 
     return model
 
