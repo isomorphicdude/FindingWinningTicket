@@ -38,6 +38,11 @@ def numParam(model):
   print(f"\n \n After pruning, the total no. of nonzero weights is: {num_params_after} \n \n")  
 
 
-# TODO: add data pre-processing pipeline
+def test_masks(model):
+  """Returns mask as all ones for testing."""
+  fake_mask = []
+  for layer in model.trainable_weights:
+    fake_mask.append(np.ones_like(layer.numpy()))
+  return fake_mask
 
 
