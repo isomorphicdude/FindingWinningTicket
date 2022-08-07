@@ -103,7 +103,7 @@ def makeFC(preinit_weights = None, masks = None,
               kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
               model.add(tf.keras.layers.BatchNormalization())
 
-    if BatchNorm and Dropout:
+    if BatchNorm and Dropout is not None:
         for i in range(num_layer):
             if masks is None:
                 mask = None
@@ -115,20 +115,22 @@ def makeFC(preinit_weights = None, masks = None,
                 preinit_weight = None
             else:
                 preinit_weight = preinit_weights[2*i]
-
+            
             dropout = Dropout[i]
-
+            
             if layers[0]==300 and i==num_layer-1:
               model.add(tf.keras.layers.Dense(layers[i], 
               kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
               model.add(tf.keras.layers.BatchNormalization())
+              model.add(tf.keras.layers.Dropout(dropout))
             else:
               model.add(tf.keras.layers.Dense(layers[i], 
               activation=activation,
               kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
               model.add(tf.keras.layers.BatchNormalization())
+              model.add(tf.keras.layers.Dropout(dropout))
 
-    if not BatchNorm and Dropout:
+    if not BatchNorm and Dropout is not None:
         for i in range(num_layer):
             if masks is None:
                 mask = None
@@ -146,10 +148,12 @@ def makeFC(preinit_weights = None, masks = None,
             if layers[0]==300 and i==num_layer-1:
               model.add(tf.keras.layers.Dense(layers[i], 
               kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
+              model.add(tf.keras.layers.Dropout(dropout))
             else:
               model.add(tf.keras.layers.Dense(layers[i], 
               activation=activation,
               kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
+              model.add(tf.keras.layers.Dropout(dropout))
 
     if not BatchNorm and Dropout is None:
         for i in range(num_layer):
