@@ -43,6 +43,48 @@ def test_masks(model):
   fake_mask = []
   for layer in model.trainable_weights:
     fake_mask.append(np.ones_like(layer.numpy()))
-  return fake_mask
+  return fake_mask  
+
+
+def earlyStop(hist_metric, patience = 5, use_loss = True):
+
+  """
+  Returns a boolean value for stopping training.  
+  
+  Args:
+    - hist_metric: list, historical metrics for determining early stop
+    - patience: int, no. of epochs to wait before stopping, default 5   
+    - use_loss: bool, determines if the metric should be loss  
+
+  Output:  
+    - flag: bool, determines if training should stop  
+  """    
+  N = len(hist_metric)
+
+  if N <= 2*patience:
+    return False  
+
+  #TODO: implement a better way to capture increase in loss  
+
+  counter = 0
+  if use_loss:
+    for i in range(N-1, 0, -1):
+      if hist_metric[i]>=hist_metric[i-1]:
+        counter+=1
+      if counter>patience:
+        return True
+  else:
+    for i in range(N-1, 0, -1):
+      if hist_metric[i]<=hist_metric[i-1]:
+        counter+=1
+      if counter>patience:
+        return True
+  
+  return False
+
+  
+
+
+
 
 
