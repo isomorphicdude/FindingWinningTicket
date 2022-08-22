@@ -109,7 +109,13 @@ class pruning(object):
 
 
     def test_training(self, epochs = 5):
-        '''Checks training loop is written correctly.'''  
+        '''
+        Checks training loop is written correctly.   
+
+        Args:
+            - epochs: int, number of epochs to test training, default 5 
+        
+        '''  
         model = makeFC()
         fake_mask = test_masks(model)
         model.summary()
