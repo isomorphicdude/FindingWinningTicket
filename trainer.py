@@ -4,7 +4,7 @@ import numpy as np
 import datetime
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from tqdm import tqdm  
+# from tqdm import tqdm  
 from models import *
 from helper import *
 
@@ -24,8 +24,8 @@ def train_one_step(model,
       - model: model to train
       - x,y: data
       - masks: list of masks,
-               length equal to the no. of layers (including the biases
-               whose masks are 1)
+               length equal to the no. of layers (including other
+               trainable variables whose masks are 1)
       - optimizer: tf.keras.optimizer
       - loss_fn: loss function 
       - train_acc:
@@ -107,7 +107,8 @@ def iterPruning(modelFunc,
     - step_perc: percentage to prune
   '''  
   
-  masks_set = [None]
+  init_masks_set = [None]
+  train_masks_set = [None]
 
   # unpack parameters
   optimizer = model_params['optimizer']
@@ -135,7 +136,7 @@ def iterPruning(modelFunc,
     print(f"\n \n Iterative pruning round: {i} \n \n")
 
     # initialize and train network
-    model_to_prune = modelFunc(None, masks_set[i])
+    model_to_prune = modelFunc(None, init_masks_set[i])
     numParam(model_to_prune)
     
     # get init weights before training
@@ -153,21 +154,6 @@ def iterPruning(modelFunc,
                     SparseCategoricalAccuracy(name = 'train_accuracy'),
                     train_loss = tf.keras.metrics.Mean(name = 'train_loss')
                     ):
-        '''
-        Trains the model from one sample.
-
-        Parameters:  
-          - model: model to train
-          - x,y: data
-          - masks: list of masks,
-                  length equal to the no. of layers (including the biases
-                  whose masks are 1)
-          - optimizer: tf.keras.optimizer
-          - loss_fn: loss function 
-          - train_acc: tf accuracy object
-          - train_loss: tf loss object
-        '''
-        
         with tf.GradientTape() as tape:
             y_pred = model(x, training = True)
             loss = loss_fn(y, y_pred)
@@ -176,7 +162,7 @@ def iterPruning(modelFunc,
         
         if masks is not None:
           grad_masked = []
-          # Element-wise multiplication between computed gradients and masks
+
           for grad, mask in zip(grads, masks):
             grad_masked.append(tf.math.multiply(grad, mask))
           
@@ -195,29 +181,19 @@ def iterPruning(modelFunc,
                   SparseCategoricalAccuracy(name = 'test_accuracy'),
                   test_loss = tf.keras.metrics.Mean(name = 'test_loss')
                   ):
-      
-      '''
-        Tests the model from one sample.
-
-        Parameters:  
-          - model: model to train
-          - x,y: sample and label
-          - loss_fn: loss function 
-          - test_acc: tf accuracy object
-          - test_loss: tf loss object
-      '''  
 
       prediction = model(x)
       loss = loss_fn(y, prediction)
       test_acc.update_state(y, prediction)
       test_loss(loss)
+###############################################################################
     for epoch in range(epochs):  
 
       print(f"Epoch {epoch} for original")
 
       for x,y in ds_train:
         train_one_step_og(model_to_prune, x,y, 
-                      masks_set[i], optimizer,
+                      train_masks_set[i], optimizer,
                       loss_fn, train_acc, train_loss)
 
       with train_og.as_default():
@@ -258,10 +234,16 @@ def iterPruning(modelFunc,
 
     # prune and create mask using percentile
     next_masks = customPruneFC(model_to_prune, step_perc)
-    masks_set.append(next_masks)
+
+    # create mask lists that are passed to train and test one steps functions
+    mask_list = [next_masks[key].astype('float32') for key in next_masks.keys()]
+
+    train_masks_set.append(mask_list)
+    init_masks_set.append(next_masks)
 
     # initialize the lottery tickets
     re_ticket = modelFunc(pretrained_weights, next_masks)
+    # sanity check
     numParam(re_ticket)
 
     # train the lottery tickets  
@@ -288,20 +270,6 @@ def iterPruning(modelFunc,
                     SparseCategoricalAccuracy(name = 'train_accuracy'),
                     train_loss = tf.keras.metrics.Mean(name = 'train_loss')
                     ):
-        '''
-        Trains the model from one sample.
-
-        Parameters:  
-          - model: model to train
-          - x,y: data
-          - masks: list of masks,
-                  length equal to the no. of layers (including the biases
-                  whose masks are 1)
-          - optimizer: tf.keras.optimizer
-          - loss_fn: loss function 
-          - train_acc:
-          - train_loss: 
-        '''
         
         with tf.GradientTape() as tape:
             y_pred = model(x, training = True)
@@ -330,31 +298,21 @@ def iterPruning(modelFunc,
                   SparseCategoricalAccuracy(name = 'test_accuracy'),
                   test_loss = tf.keras.metrics.Mean(name = 'test_loss')
                   ):
-      
-      '''
-        Tests the model from one sample.
-
-        Parameters:  
-          - model: model to train
-          - x,y: sample and label
-          - loss_fn: loss function 
-      '''  
 
       prediction = model(x)
       loss = loss_fn(y, prediction)
       test_acc.update_state(y, prediction)
       test_loss(loss)   
-
+###############################################################################
     for epoch in range(epochs):
       # train the same number of epochs for lottery tickets
       print(f"Epoch {epoch} for lottery ticket")
-
 
       for x,y in ds_train:
         # in batches, train the lottery tickets
 
         train_one_step_tk(re_ticket, x,y, 
-                      next_masks, optimizer,
+                      mask_list, optimizer,
                       loss_fn, train_ticket_acc, train_ticket_loss)
 
       with train_ticket.as_default():
