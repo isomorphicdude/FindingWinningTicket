@@ -78,6 +78,8 @@ def test_one_step(model,
   
 
 
+# the test dataset is used as validation here
+# a separate validation function is implemented in pruning.py
 
 def iterPruning(modelFunc,
                 ds_train,
@@ -96,15 +98,16 @@ def iterPruning(modelFunc,
     - ds_train:
     - ds_test:
     - model_params:
-    - train_params:
+    - train_params: dictionary, contains keys:
+                  - train_loss: tf loss object
+                  - train_acc: tf accuracy object
+                  - patience: int, no. of epochs to wait before early stopping  
     - epochs: epochs to train the model before pruning
     - num_pruning: no. of rounds to prune
     - step_perc: percentage to prune
   '''  
   
   masks_set = [None]
-  # ticket_hist = []
-  # init_weight_set = [None]
 
   # unpack parameters
   optimizer = model_params['optimizer']
@@ -113,6 +116,7 @@ def iterPruning(modelFunc,
   train_acc = train_params['train_acc'](name = 'train_og_a')
   test_loss = train_params['train_loss'](name = 'test_og_l')
   test_acc = train_params['train_acc'](name = 'test_og_a')
+  patience = train_params['patience']
   
   # to use tensorboard
   current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")  
@@ -123,7 +127,10 @@ def iterPruning(modelFunc,
   test_og = tf.summary.create_file_writer(test_og_log_dir)
 
   for i in range(0, num_pruning):
-    original_acc = []
+    # pruning loop
+
+    original_loss_hist = [] # record loss to determine early stopping
+    ticket_loss_hist = []   # record loss of ticket
 
     print(f"\n \n Iterative pruning round: {i} \n \n")
 
@@ -157,8 +164,8 @@ def iterPruning(modelFunc,
                   whose masks are 1)
           - optimizer: tf.keras.optimizer
           - loss_fn: loss function 
-          - train_acc:
-          - train_loss: 
+          - train_acc: tf accuracy object
+          - train_loss: tf loss object
         '''
         
         with tf.GradientTape() as tape:
@@ -196,6 +203,8 @@ def iterPruning(modelFunc,
           - model: model to train
           - x,y: sample and label
           - loss_fn: loss function 
+          - test_acc: tf accuracy object
+          - test_loss: tf loss object
       '''  
 
       prediction = model(x)
@@ -229,16 +238,23 @@ def iterPruning(modelFunc,
         tf.summary.scalar('test_og_accuracy', test_acc.result(), step=epoch)
 
       # stores original accuracy
-      # uses built in
-      # og_acc = model_to_prune.evaluate(ds_test)[1]
       print(f"Original model accuracy {test_acc.result()} \n")
-      original_acc.append(test_acc.result())
+      # original_acc.append(test_acc.result())
+      original_loss_hist.append(test_loss.result())
 
       test_loss.reset_states()
-      test_acc.reset_states()
+      test_acc.reset_states()  
 
-    original_best = np.max(np.array(original_acc))
-    print(f"\n Original model training finished. Highest Accuracy {original_best} \n")
+      flag = earlyStop(original_loss_hist, patience)
+
+      if flag:
+        print(f"Early stop; the original accuracy is {test_acc.result()} and loss is {test_loss.result()}")
+        break
+
+    # original_best = np.max(np.array(original_acc))
+    # print(f"\n Original model training finished. Highest Accuracy {original_best} \n")
+
+
 
     # prune and create mask using percentile
     next_masks = customPruneFC(model_to_prune, step_perc)
@@ -333,6 +349,7 @@ def iterPruning(modelFunc,
       # train the same number of epochs for lottery tickets
       print(f"Epoch {epoch} for lottery ticket")
 
+
       for x,y in ds_train:
         # in batches, train the lottery tickets
 
@@ -358,19 +375,30 @@ def iterPruning(modelFunc,
       with test_ticket.as_default():
         tf.summary.scalar('test_ticket_loss', test_ticket_loss.result(), step=epoch)
         tf.summary.scalar('test_ticket_accuracy', test_ticket_acc.result(), step=epoch)
-
+      
       ticket_acc = test_ticket_acc.result()
+      ticket_loss_hist.append(test_ticket_loss.result())
+
       test_ticket_loss.reset_states()
       test_ticket_acc.reset_states()
 
       print(f"Lottery ticket accuracy {ticket_acc} \n")
 
-      if ticket_acc > original_best:  
-        print(f"\n Early stop, ticket accuracy: {ticket_acc} \n")
-        re_ticket.save(f'saved_models/ticket_acc_{ticket_acc}'+f'pruning round_{i}')
+      ticket_flag = earlyStop(ticket_loss_hist, patience)
+
+      if ticket_flag:
+        print(f"\n Early stop, ticket accuracy: {ticket_acc} and ticket loss: {test_ticket_loss.result()} \n")
+        break
+
+      # if ticket_acc > original_best:  
+      #   print(f"\n Early stop, ticket accuracy: {ticket_acc} \n")
+      #   re_ticket.save(f'saved_models/ticket_acc_{ticket_acc}'+f'pruning round_{i}')
         # new_model = tf.keras.models.load_model('saved_model/my_model')
         # to reload the model
-        break
+        # break
+
+      
+
     print(f"\n Lottery ticket training finished. Highest Accuracy {ticket_acc} \n")
     re_ticket.save(f'saved_models/ticket_acc_{ticket_acc}'+f' pruning round_{i}')
 
