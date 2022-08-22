@@ -4,18 +4,31 @@ import numpy as np
 import tensorflow as tf  
 
 def customPruneFC(model, prune_perc = 0.5):
-  '''Returns a mask covering weights of lower magnitudes.''' 
+  '''
+  Returns a mask covering weights of lower magnitudes.  
+
+  Args:  
+    - model: tf.keras.model for pruning  
+    - prune_perc: float, percentage of weights to remove,
+                  namely the weights that are of percentile below this
+                  will be removed
+  
+  Output:
+    -  masks: a list of ndarrays, mask for all trainable variables,
+              for the kernel (weight matrices) this is the normal mask,
+              for all other trainable variables, this is all ones
+  ''' 
   masks = [] 
   for layer in model.trainable_weights:
     # ignore the bias
-    weight = layer.numpy()
-    if len(weight.shape)==2:
+    if 'kernel' in layer.name:
+      weight = layer.numpy()
       perc = np.percentile(weight, prune_perc * 100)
       mask = np.array(weight>perc, dtype = 'float32')
       # print(tf.math.count_nonzero(mask)/len(mask.flatten()))
       masks.append(mask)
     else:
-      masks.append(np.ones_like(weight))
+      masks.append(np.ones_like(layer.numpy().shape))
   return masks   
 
 
