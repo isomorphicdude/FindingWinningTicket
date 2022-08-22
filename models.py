@@ -18,7 +18,7 @@ class maskInit(tf.keras.initializers.Initializer):
     Returns custom weight initializer with mask.  
 
     Parameters:  
-      - mask: ndarray of mask
+      - mask: ndarray of a single mask for one layer
       - preinit_weights: weights
       - initializer: tf.keras.initializers object
     '''
@@ -31,7 +31,6 @@ class maskInit(tf.keras.initializers.Initializer):
     out = None
 
     if self.preinit_weights is not None and self.mask is not None:
-
         out = tf.math.multiply(self.mask, self.preinit_weights)
 
     elif self.preinit_weights is None and self.mask is not None: 
@@ -46,6 +45,7 @@ class maskInit(tf.keras.initializers.Initializer):
 
     return out  
 
+
 def makeFC(preinit_weights = None, masks = None,
               layers = [300, 100, 10],
               activation = 'relu',
@@ -58,10 +58,10 @@ def makeFC(preinit_weights = None, masks = None,
     '''
     Returns a model for pruning.   
 
-    Parameters:    
+    Args:    
         - preinit_weights: ndarray, the initialized weights, default to None,
                 None when first initializing  
-        - masks: list of ndarray, each element is a mask for all the weights  
+        - masks: dictionary of ndarray, each element is a mask for all the weights  
         - layers: list of integers, specifying nodes in hidden layers, 
                 [layer1, layer2, ..., output]
         - activation: string, activation function for hidden layers
@@ -79,20 +79,35 @@ def makeFC(preinit_weights = None, masks = None,
     if layers[0]==300:
         model.add(tf.keras.layers.Flatten(input_shape = (28,28)))
         
-    num_layer = len(layers)
+    num_layer = len(layers)  
+    mask_list = []
+    mask_keys = []
+
+    if masks is not None:
+        for key in masks.keys():
+            if 'kernel' in key:
+                mask_keys.append(key)
+        mask_list = [masks[key] for key in mask_keys]
+    
+    preinit_weight_list = []
+
+    if preinit_weights is not None:
+        for key in preinit_weights.keys():
+            if 'kernel' in key:
+                preinit_weight_list.append(preinit_weights[key])
 
     if BatchNorm and Dropout is None:
         for i in range(num_layer):
             if masks is None:
                 mask = None
             else:
-                # the masks in pruning function includes the biases
-                # which are np.ones(shape of bias)
-                mask = masks[2*i]
+                mask = mask_list[i]
+
             if preinit_weights is None:
                 preinit_weight = None
             else:
-                preinit_weight = preinit_weights[2*i]
+                preinit_weight =preinit_weight_list[i]
+
             if layers[0]==300 and i==num_layer-1:
               model.add(tf.keras.layers.Dense(layers[i], 
               kernel_initializer=maskInit(mask=mask, preinit_weights = preinit_weight)))
@@ -110,11 +125,11 @@ def makeFC(preinit_weights = None, masks = None,
             else:
                 # the masks in pruning function includes the biases
                 # which are np.ones(shape of bias)
-                mask = masks[2*i]
+                mask = mask_list[i]
             if preinit_weights is None:
                 preinit_weight = None
             else:
-                preinit_weight = preinit_weights[2*i]
+                preinit_weight =preinit_weight_list[i]
             
             dropout = Dropout[i]
             
@@ -137,11 +152,11 @@ def makeFC(preinit_weights = None, masks = None,
             else:
                 # the masks in pruning function includes the biases
                 # which are np.ones(shape of bias)
-                mask = masks[2*i]
+                mask = mask_list[i]
             if preinit_weights is None:
                 preinit_weight = None
             else:
-                preinit_weight = preinit_weights[2*i]
+                preinit_weight =preinit_weight_list[i]
                 
             dropout = Dropout[i]
 
@@ -162,11 +177,11 @@ def makeFC(preinit_weights = None, masks = None,
             else:
                 # the masks in pruning function includes the biases
                 # which are np.ones(shape of bias)
-                mask = masks[2*i]
+                mask = mask_list[i]
             if preinit_weights is None:
                 preinit_weight = None
             else:
-                preinit_weight = preinit_weights[2*i]
+                preinit_weight =preinit_weight_list[i]
                 
             if layers[0]==300 and i==num_layer-1:
               model.add(tf.keras.layers.Dense(layers[i], 
