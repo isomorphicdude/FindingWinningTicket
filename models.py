@@ -69,7 +69,8 @@ def makeFC(preinit_weights = None, masks = None,
         - output_shape: tuple, shape of output data
         - layers: list of integers, specifying nodes in hidden layers, 
                 [layer1, layer2, ..., layerN]
-        - activation: string, activation function for hidden layers
+        - activation: string, activation function for hidden layers  
+        - final_activation: string, activation function for output layer
         - BatchNorm: boolean, whether to use batch normalization
         - Dropout: list of floats, dropout rate for hidden layers only
         - optimizer: optimizer
