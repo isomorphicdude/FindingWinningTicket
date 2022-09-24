@@ -22,7 +22,8 @@ class pruning(object):
                 epochs_for_pruning = 10,
                 num_pruning = 10,
                 step_perc = 0.5,
-                verbose = True):
+                verbose = True,
+                same_init = False):
         '''
         Args:   
             - ds_train: dataset for training, already batched
@@ -45,7 +46,8 @@ class pruning(object):
             - epochs: epochs to train the model before pruning
             - num_pruning: no. of rounds to prune
             - step_perc: percentage to prune
-            - verbose: boolean, whether to print out information, default True
+            - verbose: boolean, whether to print out information, default True  
+            - same_init: boolean, whether to use the same initial weights after pruning, default False
         '''
         self.ds_train = ds_train
         self.ds_test = ds_test
@@ -55,30 +57,13 @@ class pruning(object):
         self.num_pruning = num_pruning
         self.step_perc = step_perc
         self.verbose = verbose    
+        self.same_init = same_init
 
     @property
     def batch_size(self):
         for img,label in self.ds_train:
             num = img.shape[0]
         return num
-
-    # TODO: add Dataset implementaion
-    
-    # @property
-    # def dset(self):
-        # some processing goes in here
-        # to modify user input
-        # pass
-    # @dset.setter
-
-    # @property
-    # def ds_train(self):
-    #     pass
-
-    # @property
-    # def ds_test(self):
-    #     pass
-    
 
     def makeModel(self, preinit_weights = None, masks = None):
         '''
@@ -91,9 +76,9 @@ class pruning(object):
     
     def prune(self):
         '''
-        Iteratively prunes the model.
+        Iteratively prunes the model and returns the initial masks.
         '''  
-        iterPruning(self.makeModel,
+        return iterPruning(self.makeModel,
                     self.ds_train,
                     self.ds_test,
                     self.model_params,
@@ -101,10 +86,11 @@ class pruning(object):
                     epochs = self.epochs_for_pruning,
                     num_pruning=self.num_pruning,
                     step_perc=self.step_perc,
-                    verbose=self.verbose)  
+                    verbose=self.verbose,
+                    same_init=self.same_init)
 
     def test_model(self):
-        '''Checks model is built correctly.'''  
+        '''Checks model is built correctly and returns trained model.'''  
         model = self.makeModel()
         model.summary()
         model.compile(self.model_params['optimizer'],
@@ -114,6 +100,7 @@ class pruning(object):
                 batch_size = self.batch_size,
                 epochs = self.epochs_for_pruning,
                 validation_data = self.ds_test)  
+        return model
 
 
     def test_training(self, epochs = 5):

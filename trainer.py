@@ -92,9 +92,11 @@ def iterPruning(modelFunc,
                 epochs = 10,
                 num_pruning = 10,
                 step_perc = 0.5,
-                verbose = False):  
+                verbose = False,
+                same_init = False):  
   '''
-  Returns winning ticket and prints train&test accuracies.  
+  Saves winning ticket as well as original models and prints train&test accuracies.  
+  Also returns a list of masks.  
 
   Args:
     - modelFunc: function for initializing model, 
@@ -110,33 +112,37 @@ def iterPruning(modelFunc,
     - num_pruning: no. of rounds to prune
     - step_perc: percentage to prune  
     - verbose: bool, print train&test accuracies, default False
+    - same_init: bool, use same initial weights after pruning, default False;  
+                  False will use random and ticket will not be trained.
   '''  
   
   init_masks_set = [None]
   train_masks_set = [None]
 
-  # unpack parameters
-  optimizer = model_params['optimizer']
-  loss_fn = model_params['loss_fn']
-  train_loss = train_params['train_loss'](name = 'train_og_l')
-  train_acc = train_params['train_acc'](name = 'train_og_a')
-  test_loss = train_params['train_loss'](name = 'test_og_l')
-  test_acc = train_params['train_acc'](name = 'test_og_a')
-  patience = train_params['patience']
-  
-  # to use tensorboard
-  current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")  
-  train_og_log_dir = 'logs/' + current_time + '/train_og'
-  test_og_log_dir = 'logs/' + current_time + '/test_og'  
-
-  train_og = tf.summary.create_file_writer(train_og_log_dir)
-  test_og = tf.summary.create_file_writer(test_og_log_dir)
-
   for i in range(0, num_pruning):
     # pruning loop
 
+    # unpack parameters
+    optimizer = model_params['optimizer']
+    loss_fn = model_params['loss_fn']
+    train_loss = train_params['train_loss'](name = 'train_og_l')
+    train_acc = train_params['train_acc'](name = 'train_og_a')
+    test_loss = train_params['train_loss'](name = 'test_og_l')
+    test_acc = train_params['train_acc'](name = 'test_og_a')
+    patience = train_params['patience']
+    
+    # to use tensorboard
+    current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")  
+    train_og_log_dir = 'logs/' + current_time + '/train_og'
+    test_og_log_dir = 'logs/' + current_time + '/test_og'  
+
+    train_og = tf.summary.create_file_writer(train_og_log_dir)
+    test_og = tf.summary.create_file_writer(test_og_log_dir)
+
     original_loss_hist = [] # record loss to determine early stopping
     ticket_loss_hist = []   # record loss of ticket
+
+    original_acc_hist = []  # record accuracy for printing
 
     print(f"\n \n Iterative pruning round: {i} \n \n")
 
@@ -145,7 +151,7 @@ def iterPruning(modelFunc,
     numParam(model_to_prune)
     
     # get init weights before training
-    pretrained_weights = getInitWeight(model_to_prune)
+    init_weights = getInitWeight(model_to_prune)
 
     # training the model before pruning
     print("\n Start original model training. \n")  
@@ -193,7 +199,7 @@ def iterPruning(modelFunc,
       test_loss(loss)
 ###############################################################################
     for epoch in range(epochs):  
-      # training loop
+      # training loop for original model
       if verbose:
         print(f"Epoch {epoch} for original")
 
@@ -221,6 +227,8 @@ def iterPruning(modelFunc,
       test_loss_resu = test_loss.result()
       test_acc_resu = test_acc.result()
 
+      original_acc_hist.append(test_acc_resu)
+
       with test_og.as_default():
         tf.summary.scalar('test_og_loss', test_loss_resu, step=epoch)
         tf.summary.scalar('test_og_accuracy', test_acc_resu, step=epoch)
@@ -238,11 +246,12 @@ def iterPruning(modelFunc,
 
       if flag:
         print(f"Early stop; the original accuracy is {test_acc_resu} and loss is {test_loss_resu}")
+
         break
 
-    # original_best = np.max(np.array(original_acc))
-    # print(f"\n Original model training finished. Highest Accuracy {original_best} \n")
-
+    original_best = np.min(np.array(original_acc_hist))
+    print(f"\n Original model training finished. Highest Accuracy {original_best} \n")
+    model_to_prune.save(f'saved_models/original_acc_{original_best}'+f' pruning round_{i}')
 
 
     # prune and create mask using percentile
@@ -255,129 +264,123 @@ def iterPruning(modelFunc,
     init_masks_set.append(next_masks)
 
     # initialize the lottery tickets
-    re_ticket = modelFunc(pretrained_weights, next_masks)
-    # sanity check
-    numParam(re_ticket)
+    if same_init:
+      re_ticket = modelFunc(init_weights, next_masks)
 
-    # train the lottery tickets  
-    print("\n Start Lottery ticket training \n")
+      # sanity check
+      numParam(re_ticket)
 
-    # instantiate metrics to use tensorboard  
-    train_ticket_loss = train_params['train_loss'](name = 'train_ticket_l')
-    train_ticket_acc = train_params['train_acc'](name = 'train_ticket_a')
-    test_ticket_loss = train_params['train_loss'](name = 'test_ticket_l')
-    test_ticket_acc = train_params['train_acc'](name = 'test_ticket_a')
+      # train the lottery tickets  
+      print("\n Start Lottery ticket training \n")
 
-    train_ticket_log_dir = 'logs/' + current_time + '/train_ticket'
-    test_ticket_log_dir = 'logs/' + current_time + '/test_ticket'  
-    train_ticket = tf.summary.create_file_writer(train_ticket_log_dir)
-    test_ticket = tf.summary.create_file_writer(test_ticket_log_dir)  
+      # instantiate metrics to use tensorboard  
+      train_ticket_loss = train_params['train_loss'](name = 'train_ticket_l')
+      train_ticket_acc = train_params['train_acc'](name = 'train_ticket_a')
+      test_ticket_loss = train_params['train_loss'](name = 'test_ticket_l')
+      test_ticket_acc = train_params['train_acc'](name = 'test_ticket_a')
 
-##############################################################################################
-    @tf.function
-    def train_one_step_tk(model, 
-                    x,y,
-                    masks, optimizer, 
-                    loss_fn, 
-                    train_acc = tf.keras.metrics.
-                    SparseCategoricalAccuracy(name = 'train_accuracy'),
-                    train_loss = tf.keras.metrics.Mean(name = 'train_loss')
-                    ):
-        
-        with tf.GradientTape() as tape:
-            y_pred = model(x, training = True)
-            loss = loss_fn(y, y_pred)
-            
-        grads = tape.gradient(loss, model.trainable_variables)
-        
-        if masks is not None:
-          grad_masked = []
-          # Element-wise multiplication between computed gradients and masks
-          for grad, mask in zip(grads, masks):
-            grad_masked.append(tf.math.multiply(grad, mask))
+      train_ticket_log_dir = 'logs/' + current_time + '/train_ticket'
+      test_ticket_log_dir = 'logs/' + current_time + '/test_ticket'  
+      train_ticket = tf.summary.create_file_writer(train_ticket_log_dir)
+      test_ticket = tf.summary.create_file_writer(test_ticket_log_dir)  
+
+  ##############################################################################################
+      @tf.function
+      def train_one_step_tk(model, 
+                      x,y,
+                      masks, optimizer, 
+                      loss_fn, 
+                      train_acc = tf.keras.metrics.
+                      SparseCategoricalAccuracy(name = 'train_accuracy'),
+                      train_loss = tf.keras.metrics.Mean(name = 'train_loss')
+                      ):
           
-          optimizer.apply_gradients(zip(grad_masked, model.trainable_variables))
+          with tf.GradientTape() as tape:
+              y_pred = model(x, training = True)
+              loss = loss_fn(y, y_pred)
+              
+          grads = tape.gradient(loss, model.trainable_variables)
+          
+          if masks is not None:
+            grad_masked = []
+            # Element-wise multiplication between computed gradients and masks
+            for grad, mask in zip(grads, masks):
+              grad_masked.append(tf.math.multiply(grad, mask))
+            
+            optimizer.apply_gradients(zip(grad_masked, model.trainable_variables))
 
-        else:
-          optimizer.apply_gradients(zip(grads, model.trainable_variables))
-        train_acc.update_state(y, y_pred)
-        train_loss(loss)
-##############################################################################################
-    @tf.function
-    def test_one_step_tk(model, 
-                  x,y, 
-                  loss_fn, 
-                  test_acc = tf.keras.metrics.
-                  SparseCategoricalAccuracy(name = 'test_accuracy'),
-                  test_loss = tf.keras.metrics.Mean(name = 'test_loss')
-                  ):
+          else:
+            optimizer.apply_gradients(zip(grads, model.trainable_variables))
+          train_acc.update_state(y, y_pred)
+          train_loss(loss)
+  ##############################################################################################
+      @tf.function
+      def test_one_step_tk(model, 
+                    x,y, 
+                    loss_fn, 
+                    test_acc = tf.keras.metrics.
+                    SparseCategoricalAccuracy(name = 'test_accuracy'),
+                    test_loss = tf.keras.metrics.Mean(name = 'test_loss')
+                    ):
 
-      prediction = model(x)
-      loss = loss_fn(y, prediction)
-      test_acc.update_state(y, prediction)
-      test_loss(loss)   
-###############################################################################
-    for epoch in range(epochs):
-      # train the same number of epochs for lottery tickets
-      if verbose:
-        print(f"Epoch {epoch} for lottery ticket")
+        prediction = model(x)
+        loss = loss_fn(y, prediction)
+        test_acc.update_state(y, prediction)
+        test_loss(loss)   
+  ###############################################################################
+      for epoch in range(epochs):
+        # train the same number of epochs for lottery tickets
+        if verbose:
+          print(f"Epoch {epoch} for lottery ticket")
 
-      for x,y in ds_train:
-        # in batches, train the lottery tickets
+        for x,y in ds_train:
+          # in batches, train the lottery tickets
 
-        train_one_step_tk(re_ticket, x,y, 
-                      mask_list, optimizer,
-                      loss_fn, train_ticket_acc, train_ticket_loss)
+          train_one_step_tk(re_ticket, x,y, 
+                        mask_list, optimizer,
+                        loss_fn, train_ticket_acc, train_ticket_loss)
 
-      train_ticket_acc_resu = train_ticket_acc.result()
-      train_ticket_loss_resu = train_ticket_loss.result()
+        train_ticket_acc_resu = train_ticket_acc.result()
+        train_ticket_loss_resu = train_ticket_loss.result()
 
-      with train_ticket.as_default():
-        tf.summary.scalar('train_ticket_loss', train_ticket_loss_resu, step=epoch)
-        tf.summary.scalar('train_ticket_accuracy', train_ticket_acc_resu, step=epoch)
+        with train_ticket.as_default():
+          tf.summary.scalar('train_ticket_loss', train_ticket_loss_resu, step=epoch)
+          tf.summary.scalar('train_ticket_accuracy', train_ticket_acc_resu, step=epoch)
 
-      # optional printing of train acc
-      if verbose:
-        print(f"Ticket train accuracy {train_ticket_acc_resu} \n")
-      train_ticket_loss.reset_states()
-      train_ticket_acc.reset_states()
+        # optional printing of train acc
+        if verbose:
+          print(f"Ticket train accuracy {train_ticket_acc_resu}")
+        train_ticket_loss.reset_states()
+        train_ticket_acc.reset_states()
 
-      # evaluate acc of lottery tickets on the same set  
-      for x,y in ds_test:
-        test_one_step_tk(re_ticket, x, y, loss_fn,
-                      test_ticket_acc, test_ticket_loss)
+        # evaluate acc of lottery tickets on the same set  
+        for x,y in ds_test:
+          test_one_step_tk(re_ticket, x, y, loss_fn,
+                        test_ticket_acc, test_ticket_loss)
 
-      with test_ticket.as_default():
-        tf.summary.scalar('test_ticket_loss', test_ticket_loss.result(), step=epoch)
-        tf.summary.scalar('test_ticket_accuracy', test_ticket_acc.result(), step=epoch)
-      
-      ticket_acc_resu = test_ticket_acc.result()
-      ticket_loss_resu = test_ticket_loss.result()
-      ticket_loss_hist.append(ticket_loss_resu)
+        with test_ticket.as_default():
+          tf.summary.scalar('test_ticket_loss', test_ticket_loss.result(), step=epoch)
+          tf.summary.scalar('test_ticket_accuracy', test_ticket_acc.result(), step=epoch)
+        
+        ticket_acc_resu = test_ticket_acc.result()
+        ticket_loss_resu = test_ticket_loss.result()
+        ticket_loss_hist.append(ticket_loss_resu)
 
-      test_ticket_loss.reset_states()
-      test_ticket_acc.reset_states()
-      if verbose:
-        print(f"Ticket test accuracy {ticket_acc_resu} \n")
+        test_ticket_loss.reset_states()
+        test_ticket_acc.reset_states()
+        if verbose:
+          print(f"Ticket test accuracy {ticket_acc_resu} \n")
 
-      ticket_flag = earlyStop(ticket_loss_hist, patience)
+        ticket_flag = earlyStop(ticket_loss_hist, patience)
 
-      if ticket_flag:
-        print(f"\n Early stop, ticket accuracy: {ticket_acc_resu} and ticket loss: {ticket_loss_resu} \n")
-        break
+        if ticket_flag:
+          print(f"\n Early stop, ticket accuracy: {ticket_acc_resu} and ticket loss: {ticket_loss_resu} \n")
+          break
 
-      # if ticket_acc > original_best:  
-      #   print(f"\n Early stop, ticket accuracy: {ticket_acc} \n")
-      #   re_ticket.save(f'saved_models/ticket_acc_{ticket_acc}'+f'pruning round_{i}')
-        # new_model = tf.keras.models.load_model('saved_model/my_model')
-        # to reload the model
-        # break
+      print(f"\n Lottery ticket training finished. Highest Accuracy {ticket_acc_resu} \n")
+      re_ticket.save(f'saved_models/ticket_acc_{ticket_acc_resu}'+f' pruning round_{i}')
 
-      
-
-    print(f"\n Lottery ticket training finished. Highest Accuracy {ticket_acc_resu} \n")
-    re_ticket.save(f'saved_models/ticket_acc_{ticket_acc_resu}'+f' pruning round_{i}')
-
+  return init_masks_set
   
 
   
